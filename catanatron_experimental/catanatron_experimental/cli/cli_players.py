@@ -20,6 +20,7 @@ from catanatron_experimental.machine_learning.players.minimax import (
     AlphaBetaPlayer,
     SameTurnAlphaBetaPlayer,
 )
+from catanatron_experimental.machine_learning.players.maxn_minimax import MaxnAlphaBetaPlayer
 from catanatron.players.search import VictoryPointPlayer
 from catanatron_experimental.machine_learning.players.mcts import MCTSPlayer
 from catanatron_experimental.machine_learning.players.playouts import (
@@ -94,6 +95,12 @@ CLI_PLAYERS = [
         "SameTurnAlphaBetaPlayer",
         "AlphaBeta but searches only within turn",
         SameTurnAlphaBetaPlayer,
+    ),
+    CliPlayer(
+        "ABN",
+        "MaxnAlphaBetaPlayer",
+        "Implements max-n variant of the alpha-beta algorithm",
+        MaxnAlphaBetaPlayer,
     ),
 ]
 
