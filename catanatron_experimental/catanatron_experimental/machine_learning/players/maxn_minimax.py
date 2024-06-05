@@ -11,6 +11,7 @@ from catanatron_experimental.machine_learning.players.tree_search_utils import (
 from catanatron_experimental.machine_learning.players.value import (
     DEFAULT_WEIGHTS,
     get_value_fn,
+    value_production,
 )
 from catanatron.models.player import Player
 from catanatron.models.enums import RESOURCES, SETTLEMENT, CITY
@@ -63,7 +64,6 @@ class MaxnAlphaBetaPlayer(Player):
         self.analyzed_positions = {}
 
     def value_function(self, game, p0_color, params=DEFAULT_WEIGHTS):
-        print("Using the custom value function")
         production_features = build_production_features(True)
         our_production_sample = production_features(game, p0_color)
         enemy_production_sample = production_features(game, p0_color)
