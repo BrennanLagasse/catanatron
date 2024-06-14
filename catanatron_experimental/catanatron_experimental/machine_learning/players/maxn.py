@@ -19,6 +19,8 @@ from catanatron_gym.features import (
     build_production_features,
     reachability_features,
     resource_hand_features,
+    resource_hand_features_extended,
+    iter_players
 )
 from catanatron.state_functions import (
     get_longest_road_length,
@@ -29,7 +31,7 @@ from catanatron.state_functions import (
 )
 
 
-ALPHABETA_DEFAULT_DEPTH = 2
+ALPHABETA_DEFAULT_DEPTH = 1
 MAX_SEARCH_TIME_SECS = 20
 
 
@@ -62,69 +64,98 @@ class MaxnAlphaBetaPlayer(Player):
         self.use_value_function = self.value_function
         self.epsilon = epsilon
         self.analyzed_positions = {}
-
+        self.debug = True
+    
     def value_function(self, game, p0_color, params=DEFAULT_WEIGHTS):
+        """Value function, take 3. Returns a vector of scores. For convenience, scores are ordered by turn"""
+
+        if self.debug:
+            print(p0_color)
+            self.debug = False
+
+        scores = []
+
         production_features = build_production_features(True)
-        our_production_sample = production_features(game, p0_color)
-        enemy_production_sample = production_features(game, p0_color)
-        production = value_production(our_production_sample, "P0")
-        enemy_production = value_production(enemy_production_sample, "P1", False)
 
-        key = player_key(game.state, p0_color)
-        longest_road_length = get_longest_road_length(game.state, p0_color)
+        for p, color in iter_players(game.state.colors, p0_color):
 
-        reachability_sample = reachability_features(game, p0_color, 2)
-        features = [f"P0_0_ROAD_REACHABLE_{resource}" for resource in RESOURCES]
-        reachable_production_at_zero = sum([reachability_sample[f] for f in features])
-        features = [f"P0_1_ROAD_REACHABLE_{resource}" for resource in RESOURCES]
-        reachable_production_at_one = sum([reachability_sample[f] for f in features])
+            key = f"P{p}"
 
-        hand_sample = resource_hand_features(game, p0_color)
-        features = [f"P0_{resource}_IN_HAND" for resource in RESOURCES]
-        distance_to_city = (
-            max(2 - hand_sample["P0_WHEAT_IN_HAND"], 0)
-            + max(3 - hand_sample["P0_ORE_IN_HAND"], 0)
-        ) / 5.0  # 0 means good. 1 means bad.
-        distance_to_settlement = (
-            max(1 - hand_sample["P0_WHEAT_IN_HAND"], 0)
-            + max(1 - hand_sample["P0_SHEEP_IN_HAND"], 0)
-            + max(1 - hand_sample["P0_BRICK_IN_HAND"], 0)
-            + max(1 - hand_sample["P0_WOOD_IN_HAND"], 0)
-        ) / 4.0  # 0 means good. 1 means bad.
-        hand_synergy = (2 - distance_to_city - distance_to_settlement) / 2
+            our_production_sample = production_features(game, p0_color)
+            production = value_production(our_production_sample, key)
 
-        num_in_hand = player_num_resource_cards(game.state, p0_color)
-        discard_penalty = params["discard_penalty"] if num_in_hand > 7 else 0
+            longest_road_length = get_longest_road_length(game.state, color)
 
-        # blockability
-        buildings = game.state.buildings_by_color[p0_color]
-        owned_nodes = buildings[SETTLEMENT] + buildings[CITY]
-        owned_tiles = set()
-        for n in owned_nodes:
-            owned_tiles.update(game.state.board.map.adjacent_tiles[n])
-        num_tiles = len(owned_tiles)
+            reachability_sample = reachability_features(game, p0_color, 2)
+            features = [f"P{p}_0_ROAD_REACHABLE_{resource}" for resource in RESOURCES]
+            reachable_production_at_zero = sum([reachability_sample[f] for f in features])
+            features = [f"P{p}_1_ROAD_REACHABLE_{resource}" for resource in RESOURCES]
+            reachable_production_at_one = sum([reachability_sample[f] for f in features])
 
-        # TODO: Simplify to linear(?)
-        num_buildable_nodes = len(game.state.board.buildable_node_ids(p0_color))
-        longest_road_factor = (
-            params["longest_road"] if num_buildable_nodes == 0 else 0.1
-        )
+            # FIX BELOW
+            hand_sample = resource_hand_features_extended(game, p0_color)
+            features = [f"P{p}_{resource}_IN_HAND" for resource in RESOURCES]
+            distance_to_city = (
+                max(2 - hand_sample[f"P{p}_WHEAT_IN_HAND"], 0)
+                + max(3 - hand_sample[f"P{p}_ORE_IN_HAND"], 0)
+            ) / 5.0  # 0 means good. 1 means bad.
+            distance_to_settlement = (
+                max(1 - hand_sample[f"P{p}_WHEAT_IN_HAND"], 0)
+                + max(1 - hand_sample[f"P{p}_SHEEP_IN_HAND"], 0)
+                + max(1 - hand_sample[f"P{p}_BRICK_IN_HAND"], 0)
+                + max(1 - hand_sample[f"P{p}_WOOD_IN_HAND"], 0)
+            ) / 4.0  # 0 means good. 1 means bad.
+            hand_synergy = (2 - distance_to_city - distance_to_settlement) / 2
 
-        return float(
-            game.state.player_state[f"{key}_VICTORY_POINTS"] * params["public_vps"]
-            + production * params["production"]
-            + enemy_production * params["enemy_production"]
-            + reachable_production_at_zero * params["reachable_production_0"]
-            + reachable_production_at_one * params["reachable_production_1"]
-            + hand_synergy * params["hand_synergy"]
-            + num_buildable_nodes * params["buildable_nodes"]
-            + num_tiles * params["num_tiles"]
-            + num_in_hand * params["hand_resources"]
-            + discard_penalty
-            + longest_road_length * longest_road_factor
-            + player_num_dev_cards(game.state, p0_color) * params["hand_devs"]
-            + get_played_dev_cards(game.state, p0_color, "KNIGHT") * params["army_size"]
-        )
+            num_in_hand = player_num_resource_cards(game.state, color)
+            discard_penalty = params["discard_penalty"] if num_in_hand > 7 else 0
+
+            # blockability
+            buildings = game.state.buildings_by_color[color]
+            owned_nodes = buildings[SETTLEMENT] + buildings[CITY]
+            owned_tiles = set()
+            for n in owned_nodes:
+                owned_tiles.update(game.state.board.map.adjacent_tiles[n])
+            num_tiles = len(owned_tiles)
+
+            # TODO: Simplify to linear(?)
+            num_buildable_nodes = len(game.state.board.buildable_node_ids(color))
+            longest_road_factor = (
+                params["longest_road"] if num_buildable_nodes == 0 else 0.1
+            )
+
+            scores.append(float(
+                game.state.player_state[f"{key}_VICTORY_POINTS"] * params["public_vps"]
+                + production * params["production"]
+                + reachable_production_at_zero * params["reachable_production_0"]
+                + reachable_production_at_one * params["reachable_production_1"]
+                + hand_synergy * params["hand_synergy"]
+                + num_buildable_nodes * params["buildable_nodes"]
+                + num_tiles * params["num_tiles"]
+                + num_in_hand * params["hand_resources"]
+                + discard_penalty
+                + longest_road_length * longest_road_factor
+                + player_num_dev_cards(game.state, color) * params["hand_devs"]
+                + get_played_dev_cards(game.state, color, "KNIGHT") * params["army_size"]
+            ))
+
+        # Normalize scores
+        total = sum(scores)
+
+        for i in range(len(scores)):
+            scores[i] /= total
+
+        diff = game.state.colors.index(p0_color)
+        print(f"raws: {scores}")
+
+        # Standardize the score order
+        # scores_ordered = []
+
+        # for i in range(len(scores)):
+        #     scores_ordered.append(scores[(diff + i) % len(scores)])
+        
+        return scores
+    
 
     def get_actions(self, game):
         if self.prunning:
@@ -132,6 +163,7 @@ class MaxnAlphaBetaPlayer(Player):
         return game.state.playable_actions
 
     def decide(self, game: Game, playable_actions):
+        #print(f"Making decision for {game.state.current_color()} for {game.state.current_prompt}")
         actions = self.get_actions(game)
         if len(actions) == 1:
             return actions[0]
@@ -150,6 +182,9 @@ class MaxnAlphaBetaPlayer(Player):
         # if game.state.num_turns > 10:
         #     render_debug_tree(node)
         #     breakpoint()
+
+        #assert False
+
         if result[0] is None:
             return playable_actions[0]
         return result[0]
@@ -170,29 +205,41 @@ class MaxnAlphaBetaPlayer(Player):
         {'value', 'action'|None if leaf, 'node' }
         """
 
-        # If Node is terminal, return static value
-        if depth == 0 or game.winning_color() is not None or time.time() >= deadline:
-            value_fn = get_value_fn(
-                self.value_fn_builder_name,
-                self.params,
-                self.value_function if self.use_value_function else None,
-            )
-            value = value_fn(game, self.color)
+        s = "\t"*(2-depth)
 
-            node.expected_value = value
-            return None, value
+        # print(f"{s}alpha: d={depth}")
 
-        #maximizingPlayer = game.state.current_color() == self.color
+        # If there is a win, it should have already been discovered
+        assert game.winning_color() is None
+
+        # Edge case: If Node is terminal, return static value
+        if depth == 0 or time.time() >= deadline:
+            values = self.value_function(game, self.color)
+
+            print(f"Seat: {game.state.colors}")
+            print(f"Leaf: {values}")
+
+            node.expected_value = values
+            # REVIEW should definitely be values
+            return None, values
+
+        # Recursive Case: Agent maximizes their own reward function
         actions = self.get_actions(game)  # list of actions.
         action_outcomes = expand_spectrum(game, actions)  # action => (game, proba)[]
+        # for action in actions:
+        #     print(f"a: {action}")
+        #     assert False
 
-        # General agent maximizes only their own reward function
+        player_idx = game.state.colors.index(game.state.current_player().color)
+        num_players = len(game.state.colors)
+
         best_action = None
         best_value = float("-inf")
         for i, (action, outcomes) in enumerate(action_outcomes.items()):
             action_node = DebugActionNode(action)
 
-            expected_value = 0
+            # Find the expected value after taking the action by evaluating all possible resulting boards
+            expected_values = [0] * len(game.state.colors)
             for j, (outcome, proba) in enumerate(outcomes):
                 out_node = DebugStateNode(
                     f"{node.label} {i} {j}", outcome.state.current_color()
@@ -201,23 +248,31 @@ class MaxnAlphaBetaPlayer(Player):
                 result = self.alphabeta(
                     outcome, depth - 1, alpha, beta, deadline, out_node
                 )
-                value = result[1]
-                expected_value += proba * value
+                # print(f"{s}\t\tOut: {result[1]}, {outcome.state.current_color()}")
+                # print(f"TEST: {game.state.colors}, {game.state.current_player().color}")
+                # print(f"TEST: {game.state.colors.index(game.state.current_player().color)}")
+                values = result[1]
+
+                for i in range(num_players):
+                    expected_values[i] += proba * values[i]
 
                 action_node.children.append(out_node)
                 action_node.probas.append(proba)
 
-            action_node.expected_value = expected_value
+            action_node.expected_values = expected_values
             node.children.append(action_node)
 
-            if expected_value > best_value:
+            # Optimize for the reward of the player from the turn before
+            if expected_values[player_idx] > best_value:
                 best_action = action
-                best_value = expected_value
+                best_values = expected_values
             
-            # Removed prior alpha-beta logic because it is wrong
+            # TODO: Add shallow pruning
 
-        node.expected_value = best_value
-        return best_action, best_value
+            # print(f"{s}\tNode: {best_value}")
+
+        node.expected_values = best_values
+        return best_action, best_values
 
 
 class DebugStateNode:

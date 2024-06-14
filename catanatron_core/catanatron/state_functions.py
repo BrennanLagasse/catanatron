@@ -110,6 +110,7 @@ def player_has_rolled(state, color):
 
 
 def get_longest_road_length(state, color):
+    """Get longest road of player with given color"""
     key = player_key(state, color)
     return state.player_state[key + "_LONGEST_ROAD_LENGTH"]
 
@@ -267,6 +268,18 @@ def buy_dev_card(state, color, dev_card):
 
 def player_num_resource_cards(state, color, card: Optional[FastResource] = None):
     key = player_key(state, color)
+    if card is None:
+        return (
+            state.player_state[f"{key}_WOOD_IN_HAND"]
+            + state.player_state[f"{key}_BRICK_IN_HAND"]
+            + state.player_state[f"{key}_SHEEP_IN_HAND"]
+            + state.player_state[f"{key}_WHEAT_IN_HAND"]
+            + state.player_state[f"{key}_ORE_IN_HAND"]
+        )
+    else:
+        return state.player_state[f"{key}_{card}_IN_HAND"]
+    
+def player_num_resource_cards_from_key(state, key, card: Optional[FastResource] = None):
     if card is None:
         return (
             state.player_state[f"{key}_WOOD_IN_HAND"]

@@ -20,7 +20,7 @@ from catanatron_experimental.machine_learning.players.minimax import (
     AlphaBetaPlayer,
     SameTurnAlphaBetaPlayer,
 )
-from catanatron_experimental.machine_learning.players.maxn_minimax import MaxnAlphaBetaPlayer
+from catanatron_experimental.machine_learning.players.maxn import MaxnAlphaBetaPlayer
 from catanatron.players.search import VictoryPointPlayer
 from catanatron_experimental.machine_learning.players.mcts import MCTSPlayer
 from catanatron_experimental.machine_learning.players.playouts import (

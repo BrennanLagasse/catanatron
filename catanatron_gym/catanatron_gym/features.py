@@ -85,6 +85,7 @@ def player_features(game: Game, p0_color: Color):
 
 
 def resource_hand_features(game: Game, p0_color: Color):
+    """Features of hand"""
     # P0_WHEATS_IN_HAND, P0_WOODS_IN_HAND, ...
     # P0_ROAD_BUILDINGS_IN_HAND, P0_KNIGHT_IN_HAND, ..., P0_VPS_IN_HAND
     # P0_ROAD_BUILDINGS_PLAYABLE, P0_KNIGHT_PLAYABLE, ...
@@ -112,6 +113,48 @@ def resource_hand_features(game: Game, p0_color: Color):
                 key + "_HAS_PLAYED_DEVELOPMENT_CARD_IN_TURN"
             ]
 
+        for card in DEVELOPMENT_CARDS:
+            if card == VICTORY_POINT:
+                continue  # cant play VPs
+            features[f"P{i}_{card}_PLAYED"] = player_state[key + f"_PLAYED_{card}"]
+
+        features[f"P{i}_NUM_RESOURCES_IN_HAND"] = player_num_resource_cards(
+            state, color
+        )
+        features[f"P{i}_NUM_DEVS_IN_HAND"] = player_num_dev_cards(state, color)
+
+    return features
+
+def resource_hand_features_extended(game: Game, p0_color: Color):
+    """Features of hand, extended for more information"""
+    # P0_WHEATS_IN_HAND, P0_WOODS_IN_HAND, ...
+    # P0_ROAD_BUILDINGS_IN_HAND, P0_KNIGHT_IN_HAND, ..., P0_VPS_IN_HAND
+    # P0_ROAD_BUILDINGS_PLAYABLE, P0_KNIGHT_PLAYABLE, ...
+    # P0_ROAD_BUILDINGS_PLAYED, P0_KNIGHT_PLAYED, ...
+
+    # P1_ROAD_BUILDINGS_PLAYED, P1_KNIGHT_PLAYED, ...
+    # TODO: P1_WHEATS_INFERENCE, P1_WOODS_INFERENCE, ...
+    # TODO: P1_ROAD_BUILDINGS_INFERENCE, P1_KNIGHT_INFERENCE, ...
+
+    state = game.state
+    player_state = state.player_state
+
+    features = {}
+    for i, color in iter_players(game.state.colors, p0_color):
+        key = player_key(game.state, color)
+
+        # Previously only for P0
+        for resource in RESOURCES:
+            features[f"P{i}_{resource}_IN_HAND"] = player_state[
+                key + f"_{resource}_IN_HAND"
+            ]
+        for card in DEVELOPMENT_CARDS:
+            features[f"P{i}_{card}_IN_HAND"] = player_state[key + f"_{card}_IN_HAND"]
+        features[f"P{i}_HAS_PLAYED_DEVELOPMENT_CARD_IN_TURN"] = player_state[
+            key + "_HAS_PLAYED_DEVELOPMENT_CARD_IN_TURN"
+        ]
+
+        # Same as before
         for card in DEVELOPMENT_CARDS:
             if card == VICTORY_POINT:
                 continue  # cant play VPs
@@ -209,9 +252,11 @@ def graph_features(game: Game, p0_color: Color):
 
 
 def build_production_features(consider_robber):
+    """Generates a function production_features to calculate production of each resource"""
     prefix = "EFFECTIVE_" if consider_robber else "TOTAL_"
 
     def production_features(game: Game, p0_color: Color):
+        """Generates a dictionary of features"""
         # P0_WHEAT_PRODUCTION, P0_ORE_PRODUCTION, ..., P1_WHEAT_PRODUCTION, ...
         features = {}
         board = game.state.board
@@ -329,6 +374,7 @@ def get_owned_or_buildable(game, color, board_buildable):
 
 
 def reachability_features(game: Game, p0_color: Color, levels=REACHABLE_FEATURES_MAX):
+    """Get reachability of all resources for all players"""
     features = {}
 
     board_buildable = game.state.board.buildable_node_ids(p0_color, True)
